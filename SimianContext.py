@@ -115,6 +115,174 @@ def component_initializer_function(comp: component.Component) -> None:
     error.custom = "Value of {{ field }} is invalid."  # Error message for custom validation.
 
 
+def component_initializer_datatables(comp: component.DataTables):
+    """Set the columns of a DataTables component."""
+    # A DataTables component must have a first column "id".
+    comp.setColumns(  # Must contain column "id'!"
+        titles=["id"],  # must contain "id"!
+        keys=["id"],  # must contain "id"!
+        visible=[False],  # Always hide the "id" column!
+    )
+
+    comp.setColumns(  # Must contain column "id'!"
+        titles=["id", "Name", "Age", "Present"],  # must contain "id"!
+        keys=["id", "name", "age", "present"],  # must contain "id"!
+        visible=[False, True, True, True],  # Always hide the "id" column!
+        orderable=[False, True, False, False],  # Option for sorting columns.
+        searchable=[False, True, False, True],  # Option for searching columns.
+        # Columns with className 'text-muted' are not editable.
+        className=["text-muted", "text-muted", None, "text-muted"],  # Option for disabling columns
+    )
+
+    # Add default values to the DataTables component with two rows. The "id" column must contain unique values.
+    comp.defaultValue = [
+        {"id": 0, "name": "Bob", "age": 49, "present": True},
+        {"id": 1, "name": "Sarah", "age": 47, "present": False},
+    ]
+
+
+def component_initializer_datatables_options(comp: component.DataTables):
+    # Options to change default features of the DataTables component.
+    comp.setFeatures(
+        searching=False,  # Option to disable search in table.
+        ordering=False,  # Option to prevent column sorting.
+        paging=False,  # Option to prevent pagination.
+        deferRender=True,  # Option to render one table page at a time to improve performance.
+    )
+
+    comp.setOptions(
+        pageLength=30,  # Option to set the initial table pagination length.
+        lengthMenu=[10, 30, {"label": "All", "value": -1}],  # Option to set pagination length menu
+        order=[[1, "asc"], [0, "desc"]],  # Option to set default column sorting.
+    )
+
+    comp.setInternationalisation(
+        decimal=".",  # Option to set the decimal separator.
+        thousands=",",  # Option to set the thousands separator.
+    )
+
+
+def datatables_callback(meta_data: dict, payload: dict):
+    """Update the contents of a DataTables component."""
+    table_value, _ = utils.getSubmissionData(payload, key="datatables_key")
+
+    # Append the datatables contents with an extra row. The id must be unique!
+    table_value.append({"id": 2, "name": "Sarah", "age": 47, "present": False})
+
+    utils.setSubmissionData(payload, key="datatables_key", data=table_value)
+
+    return payload
+
+
+def component_initializer_plotly(comp: component.Plotly):
+    """Initialize a Plotly component."""
+    comp.aspectRatio = 4 / 3  # Ratio between width and height of the figure.
+
+    # Add an initial plot using the plotly graphics library.
+    import plotly.graph_objects as go
+
+    comp.figure = go.Figure()
+
+    # Reduce the margin around the plot area.
+    comp.figure.update_layout(margin={"l": 0, "r": 0, "t": 0, "b": 0})
+
+    # Allow drawing shapes in the plotly axes:
+    comp.figure.update_layout(
+        dragmode="drawclosedpath",  # Draw a closed path on a mouse drag
+        newshape_line_color="white",
+        newshape_fillcolor="white",
+        newshape_fillrule="nonzero",  # Shape is completely filled. "evenodd" (default) for cut-outs
+    )
+
+    comp.defaultValue["config"].update(
+        {
+            "modeBarButtonsToAdd": [  # Add extra edit options to the Plotly component.
+                "drawclosedpath",
+                "drawcircle",
+                "drawrect",
+                "eraseshape",  # Add button to remove shapes.
+            ]
+        }
+    )
+
+
+def process_plotly_callback(meta_data: dict, payload: dict):
+    """Update the plotly component contents in a callback function."""
+    plot_obj, _ = utils.getSubmissionData(payload, key="plotly")
+    plot_obj.figure.add_scatter(
+        x=[1, 2, 3, 4, 5],
+        y=[0.35, 0.95, 0.32, 0.54, 0.23],
+    )
+    payload, _ = utils.setSubmissionData(payload, "plotly", plot_obj)
+
+    return payload
+
+
+def process_plotly_clear(meta_data: dict, payload: dict):
+    """Clear the contents of the plotly component in a callback function."""
+    plot_obj, _ = utils.getSubmissionData(payload, key="plotly")
+    plot_obj.clearFigure(keepLayout=True)
+    payload, _ = utils.setSubmissionData(payload, "plotly", plot_obj)
+
+    return payload
+
+
+def process_plotly_shapes(meta_data: dict, payload: dict):
+    """Process shapes drawn in the plotly component and add some more."""
+    plot_obj, _ = utils.getSubmissionData(payload, key="plotly")
+    shapes_list_of_dicts = plot_obj.getShapes()  # Get all existing shapes.
+    plot_obj.layout["shapes"] = []  # Remove all existing shapes.
+
+    simple_shape_box = {
+        "type": "line",  # May also be "rect" (for rectangle) and "circle"
+        "x": [20, 30],  # x-coordinates of the bounding box.
+        "y": [15, 25],  # y-coordinates of the bounding box.
+    }
+    plot_obj.addShape(simple_shape_box)
+
+    path_shape = {
+        "type": "path",  # Polygon
+        "x": [20, 30, 25],  # x-coordinates of the vertices
+        "y": [15, 25, 30],  # y-coordinates of the vertices
+        "closed": True,  # Closed polygon
+    }
+    plot_obj.addShape(path_shape)
+    utils.setSubmissionData(payload, key="plotly", data=plot_obj)
+    return payload
+
+
+def component_initializer_plotly_background(comp: component.Plotly):
+    """Show a background image in the Plotly component."""
+    import plotly.graph_objects as go
+
+    comp.figure = go.Figure()  # Add an initial plot using the plotly graphics library.
+
+    # Adding a background image
+    selected_image_file = "background.png"
+    base64_image = utils.encodeImage(selected_image_file)
+    img_width = 600
+    img_height = 300
+
+    image_setup = [
+        {
+            "source": base64_image,
+            "xref": "x",
+            "yref": "y",
+            "xanchor": "left",
+            "yanchor": "top",
+            "x": 1,
+            "y": 1,
+            "sizex": img_width,
+            "sizey": img_height,
+            "layer": "below",
+        }
+    ]
+
+    comp.figure.update_layout(images=image_setup, margin={"l": 0, "r": 0, "t": 0, "b": 0})
+    comp.figure.update_xaxes(showgrid=False, range=(1, img_width + 1))
+    comp.figure.update_yaxes(showgrid=False, scaleanchor="x", range=(img_height + 1, 1))
+
+
 def component_initializer_value_change(comp: component.Component) -> None:
     """Make a component fire a "change" event when its value is changed."""
     comp.properties = {"triggerHappy": True}  # No setEvent(). Fires event "change".
