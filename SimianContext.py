@@ -10,7 +10,7 @@ Advise:
 import os
 from typing import Union
 
-from simian.gui import Form, component, component_properties
+from simian.gui import Form, component, component_properties, composed_component
 import simian.gui.utils as utils
 
 
@@ -23,18 +23,30 @@ if __name__ == "__main__":
 
 def gui_init(meta_data: dict) -> dict:
     """Initialize the zoo_ui app."""
-    # Register component initialization functions.
+    # Register component initialization functions to modify the properties of existing components.
     Form.componentInitializer(
         componentKey=component_initializer_function,
         otherComponentKey=other_component_initializer_function,
+        DataTablesComponentKey=component_initializer_datatables,
+        PlotlyKey=component_initializer_plotly,
+        propertyEditorKey=composed_component.PropertyEditor.get_initializer(
+            default_value=composed_component.PropertyEditor.prepare_values([], []),
+            column_label="Properties",
+            allow_editing=True,  # Set to false to make it a PropertyViewer.
+        ),
     )
 
     # Create the form and load the json definition from the builder into it.
     form_obj = Form(from_file=__file__)
 
-    comp = component.Button(key="ComponentKey", parent=form_obj)
+    # Add a new Button component to the form with a click event "EventName".
+    comp = component.Button(key="runButton", parent=form_obj)
     comp.label = "Click me"
     comp.setEvent(event_name="EventName")
+
+    # Composed components need a parent 'Composed'. Properties are set via a component initializer.
+    comp = component.Composed(key="propertyEditorKey", parent=form_obj)
+    comp.className = "simian.gui.composed_component.PropertyEditor"
 
     return {
         "form": form_obj,
@@ -47,8 +59,31 @@ def gui_init(meta_data: dict) -> dict:
     }
 
 
+def gui_event(meta_data: dict, payload: dict) -> dict:
+    """Simian Web App callback routing function.
+
+    Args:
+        meta_data:      Form meta data.
+        payload:        Current status of the Form's contents.
+
+    Returns:
+        payload:        Updated Form contents.
+    """
+    # Register our event callbacks to the events.
+    Form.eventHandler(
+        EventName=event_callback_function,
+        blur=blur_function,
+        SpecificValueChangedEvent=specific_value_changed,
+        change=ValueChangedEvent,
+    )
+
+    # Execute the callback.
+    callback = utils.getEventFunction(meta_data, payload)
+    return callback(meta_data, payload)
+
+
 def component_initializer_function(comp: component.Component) -> None:
-    """Component initializer function."""
+    """Component initializer function to change the properties of an existing component."""
     comp.label = "New label"
     comp.description = "Component description"
     comp.tooltip = "Component tooltip"
@@ -116,7 +151,7 @@ def component_initializer_function(comp: component.Component) -> None:
 
 
 def component_initializer_datatables(comp: component.DataTables):
-    """Set the columns of a DataTables component."""
+    """Set the columns of an existing DataTables component."""
     # A DataTables component must have a first column "id".
     comp.setColumns(  # Must contain column "id'!"
         titles=["id"],  # must contain "id"!
@@ -284,22 +319,22 @@ def component_initializer_plotly_background(comp: component.Plotly):
 
 
 def component_initializer_value_change(comp: component.Component) -> None:
-    """Make a component fire a "change" event when its value is changed."""
+    """Make an existing component fire a "change" event when its value is changed."""
     comp.properties = {"triggerHappy": True}  # No setEvent(). Fires event "change".
 
 
 def component_initializer_value_change_named(comp: component.Component) -> None:
-    """Make a component fire a named event when its value is changed."""
+    """Make an existing component fire a named event when its value is changed."""
     comp.properties = {"triggerHappy": "SpecificValueChangedEvent"}  # No setEvent().
 
 
 def component_initializer_focuslost(comp: component.Component) -> None:
-    """Make a component fire an event when it loses focus."""
+    """Make an existing component fire an event when it loses focus."""
     comp.customClass = "EventOnBlur"  # No setEvent(). Fires event "blur".
 
 
 def other_component_initializer_function(comp: component.Component) -> None:
-    """Other component initializer function."""
+    """Other existing component initializer function."""
     comp.label = "Other component label"
 
 
@@ -325,29 +360,6 @@ def add_component(
     base.addComponent(comp)
 
 
-def gui_event(meta_data: dict, payload: dict) -> dict:
-    """Simian Web App callback routing function.
-
-    Args:
-        meta_data:      Form meta data.
-        payload:        Current status of the Form's contents.
-
-    Returns:
-        payload:        Updated Form contents.
-    """
-    # Register our event callbacks to the events.
-    Form.eventHandler(
-        EventName=event_callback_function,
-        blur=blur_function,
-        SpecificValueChangedEvent=specific_value_changed,
-        change=ValueChangedEvent,
-    )
-
-    # Execute the callback.
-    callback = utils.getEventFunction(meta_data, payload)
-    return callback(meta_data, payload)
-
-
 def event_callback_function(meta_data: dict, payload: dict) -> dict:
     """EventName callback function.
 
@@ -358,9 +370,44 @@ def event_callback_function(meta_data: dict, payload: dict) -> dict:
     Returns:
         payload:        Updated Form contents.
     """
+    # Generic component value updating.
     old_value, _ = utils.getSubmissionData(payload=payload, key="ComponentKey")
     new_value = old_value + 2
     utils.setSubmissionData(payload=payload, key="ComponentKey", data=new_value)
+
+    # PropertyEditor specific value updating.
+    property_editor_rows = [
+        {
+            "datatype": "text", # Or "boolean", "numeric", "select"
+            "label": "Property name",           # Mandatory
+            "tooltip": "Tooltip text",
+            "required": False,
+            "defaultValue": "Default value",    # Defaults to a minLength long list of Nones.
+            "min": 0,                           # "numeric"
+            "max": 2,                           # "numeric"
+            "decimalLimit": 2,                  # "numeric"
+            "allowed": [],                      # "select" component data source values definition.
+            "minLength": 1,                     # {1} Scalar, or minimum array length of 0 or more.
+            "maxLength": 1,                     # {1} Scalar, or maximum array length of 0 or more.
+        }
+    ]  # fmt: skip
+
+    new_props = composed_component.PropertyEditor.prepare_values(
+        prop_meta=property_editor_rows,
+        prop_values=["New value"],
+    )
+    utils.setSubmissionData(payload=payload, key="propertyEditorKey", data=new_props)
+
+    # Get PropertyEditor values.
+    props, _ = utils.getSubmissionData(payload=payload, key="propertyEditorKey")
+    prop_values = composed_component.PropertyEditor.get_values(props)
+
+    utils.addAlert(
+        payload,
+        message="Event message to show",
+        type="info",  # Type of alert: "info", "success", "warning", "danger"
+    )
+
     return payload
 
 
