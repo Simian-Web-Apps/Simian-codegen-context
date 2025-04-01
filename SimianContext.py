@@ -39,6 +39,7 @@ def gui_init(meta_data: dict) -> dict:
     # Create the form and load the json definition from the builder into it.
     form_obj = Form(from_file=__file__)
 
+    # New components must be explicitly added to the form using their constructor.
     # Add a new Button component to the form with a click event "EventName".
     comp = component.Button(key="runButton", parent=form_obj)
     comp.label = "Click me"
@@ -424,6 +425,7 @@ def ValueChangedEvent(meta_data: dict, payload: dict) -> dict:
     if payload["key"] == "ComponentKey":
         # Do something when the value of "ComponentKey" is changed.
         pass
+
     return payload
 
 
